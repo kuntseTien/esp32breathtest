@@ -11,11 +11,13 @@
 #include <AD7091R.h>
 #include <wifi.h>
 #include <Self/miniz.h>
+
 #include <string.h>
 
 #define GPIO_TEST 7
 
-#define TIMER_INTERVAL_SEC 0.0005 // 示例：2kHz的频率对应的间隔为0.0005秒
+// must larger than 0.0001
+#define TIMER_INTERVAL_SEC 0.0005
 
 #define CHUNK_SIZE 1024
 
@@ -88,6 +90,10 @@ void ad7091r_task(void *pvParameters) {
             static uint8_t level = 0;
             level = 1 - level;
             gpio_set_level(GPIO_TEST, level);
+
+            UBaseType_t uxHighWaterMark;
+            uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
+            // ESP_LOGI("ad7091r_task","High Water Mark for this task is %d\n", uxHighWaterMark);
         }
     }
 }
@@ -120,12 +126,13 @@ void initialize_timer(void) {
     gptimer_start(timer_handle);
 
     // perform measurement
-    xTaskCreate(&ad7091r_task,
+    xTaskCreatePinnedToCore(&ad7091r_task,
                 "ad7091r_task",
-                2048,
+                4096,
                 NULL,
                 10,
-                NULL);
+                NULL,
+                1);
 }
 
 // constant length
@@ -137,35 +144,44 @@ void compress_and_transmit(void *para)
         {
             ESP_LOGI("ad7091r_scan_to_buf", "perform compression procedure");
 
-            mz_stream stream;
-            memset(&stream, 0, sizeof(stream));
-            mz_deflateInit(&stream, MZ_DEFAULT_COMPRESSION);
+            // mz_stream stream;
+            // memset(&stream, 0, sizeof(stream));
+            // mz_deflateInit(&stream, MZ_DEFAULT_COMPRESSION);
 
-            const uint16_t buf_len = BUFFER_SIZE * sizeof(float);
-            uint8_t* buf = (uint8_t*) wifi_buffer;
+            // const uint16_t buf_len = BUFFER_SIZE * sizeof(float);
+            // uint8_t* buf = (uint8_t*) wifi_buffer;
 
-            // 假设我们逐块处理数据
-            for (size_t i = 0; i < buf_len * sizeof(float); i += CHUNK_SIZE) {
-                size_t chunk_size = (buf_len * sizeof(float) - i < CHUNK_SIZE) ? (buf_len * sizeof(float) - i) : CHUNK_SIZE;
-                stream.next_in = (const unsigned char*)buf + i;
-                stream.avail_in = chunk_size;
+            // // 假设我们逐块处理数据
+            // for (size_t i = 0; i < buf_len * sizeof(float); i += CHUNK_SIZE) {
+            //     size_t chunk_size = (buf_len * sizeof(float) - i < CHUNK_SIZE) ? (buf_len * sizeof(float) - i) : CHUNK_SIZE;
+            //     stream.next_in = (const unsigned char*)buf + i;
+            //     stream.avail_in = chunk_size;
 
-                uint8_t out[CHUNK_SIZE]; // 假设输出不会超过输入
-                stream.next_out = out;
-                stream.avail_out = CHUNK_SIZE;
+            //     uint8_t out[CHUNK_SIZE]; // 假设输出不会超过输入
+            //     stream.next_out = out;
+            //     stream.avail_out = CHUNK_SIZE;
 
-                // 进行压缩
-                int status = mz_deflate(&stream, MZ_NO_FLUSH);
-                assert(status == MZ_OK);
+            //     // 进行压缩
+            //     int status = mz_deflate(&stream, MZ_NO_FLUSH);
+            //     assert(status == MZ_OK);
 
-                // 计算实际的输出大小
-                size_t out_size = CHUNK_SIZE - stream.avail_out;
+            //     // 计算实际的输出大小
+            //     size_t out_size = CHUNK_SIZE - stream.avail_out;
 
-                // 通过UDP发送压缩后的数据
-                sendto(udp_socket, out, out_size, 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
-            }
+            //     // 通过UDP发送压缩后的数据
+            //     sendto(udp_socket, out, out_size, 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
+            // }
 
-            mz_deflateEnd(&stream);
+            // mz_deflateEnd(&stream);
+
+            // test
+            float t = 3.14f;
+            memcpy((uint8_t*)wifi_buffer, (uint8_t*)&t, 4);
+
+            uint8_t* float_buf = (uint8_t*) wifi_buffer;
+            ssize_t sent_bytes = sendto(udp_socket, float_buf, BUFFER_SIZE*sizeof(float), 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
+
+            ESP_LOGI("compression and tx", "Sent %d bytes", sent_bytes);
         }
         
     }

@@ -3,7 +3,7 @@
 #include "freertos/semphr.h"
 #include <sys/socket.h>
 
-#define BUFFER_SIZE 1000
+#define BUFFER_SIZE 2000
 
 extern uint16_t ping_buffer[BUFFER_SIZE];
 extern uint16_t pong_buffer[BUFFER_SIZE];
