@@ -21,13 +21,15 @@ void spi_init(spi_device_handle_t* spi)
         .command_bits=0,
         .address_bits=0,
         .dummy_bits=0,
-        .clock_speed_hz = 5*1000*1000, // 时钟速度5MHz
+        .clock_speed_hz = SPI_CLOCK_SPEED*1000*1000,
         .mode = 0,                       // SPI模式0
         .spics_io_num = AD7091R_CS,      // 片选引脚号
         .queue_size = 7,                 // 事务队列大小
     };
 
-    ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &buscfg, SPI_DMA_DISABLED));
+    spi_dma_chan_t spi_dma_enable = SPI_DMA_CH_AUTO; // SPI_DMA_DISABLED
+
+    ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &buscfg, spi_dma_enable));
     ESP_ERROR_CHECK(spi_bus_add_device(SPI2_HOST, &devcfg, spi));
 }
 
@@ -66,4 +68,36 @@ uint16_t spi_read(uint8_t operation_mode, uint8_t len, spi_device_handle_t handl
     result = (len == 1U) ? high_byte : (uint16_t)((high_byte << 8 | low_byte) >> 4) ;
     
     return result;
+}
+
+// call in timer callback
+void spi_read_2_byte_to_buf(uint8_t operation_mode, spi_device_handle_t handle)
+{
+    uint16_t low_byte;
+    uint16_t high_byte;
+    uint8_t rx_buffer[2] = {0};
+    spi_transaction_t t = {0};
+
+    t.length = 16;
+    t.rxlength = 16;
+    t.tx_buffer = NULL;
+    t.rx_buffer = rx_buffer;
+
+    gpio_set_level(AD7091R_CONVST, 0);
+    if (operation_mode == NORMAL_MODE)
+    {
+        gpio_set_level(AD7091R_CONVST, 1);
+    }
+
+    spi_device_transmit(handle, &t);
+
+    if (operation_mode == POWER_DOWN_MODE)
+    {
+        gpio_set_level(AD7091R_CONVST, 1);
+    }
+
+    // write to buf
+    high_byte = rx_buffer[0];
+    low_byte = rx_buffer[1];
+    *(active_buffer + buffer_index) = (uint16_t)((high_byte << 8 | low_byte) >> 4);
 }

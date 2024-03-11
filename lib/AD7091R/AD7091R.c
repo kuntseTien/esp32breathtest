@@ -61,6 +61,15 @@ uint16_t ad7091r_read(spi_device_handle_t spi)
     return spi_read_result;
 }
 
+void ad7091r_read_to_buf(spi_device_handle_t spi)
+{
+    spi_read_2_byte_to_buf(OPERATION_MODE, spi);
+    if (OPERATION_MODE == POWER_DOWN_MODE)
+    {
+        ad7091r_power_up();
+    }
+}
+
 float ad7091r_convert_to_volt(uint16_t adc_value, float vref)
 {
     float result;
@@ -72,6 +81,19 @@ float ad7091r_convert_to_volt(uint16_t adc_value, float vref)
 
     result = vref * (float)adc_value / ADC_RESOLUTION;
     return result;
+}
+
+void ad7091r_convert_to_volt_buf(uint16_t* raw_buf, float* target_buf, uint16_t len, float vref)
+{
+    if (vref == 0.0f)
+    {
+        vref = 2.5f;
+    }
+
+    for (uint16_t index = 0; index < len; ++index)
+    {
+        *(target_buf + index) = vref * (float)(*(raw_buf + index)) / ADC_RESOLUTION;
+    }
 }
 
 void ad7091r_power_up()
