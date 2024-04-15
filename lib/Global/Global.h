@@ -21,5 +21,5 @@ extern SemaphoreHandle_t timer_semaphore;
 // wifi
 extern int udp_socket;
 extern struct sockaddr_in server_addr;
-#define TARGET_UDP_PORT 12121
-#define TARGET_UDP_IP   "192.168.1.87"
+#define TARGET_TCP_PORT 11520
+#define TARGET_TCP_IP   "192.168.1.87"

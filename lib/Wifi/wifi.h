@@ -6,8 +6,8 @@
 #include "freertos/event_groups.h"
 
 // 定义WiFi SSID和密码
-#define WIFI_SSID "Frank"
-#define WIFI_PASS "24577079"
+#define WIFI_SSID "602lab"
+#define WIFI_PASS "602mems206"
 
 // 初始化WiFi
 void wifi_init(void);

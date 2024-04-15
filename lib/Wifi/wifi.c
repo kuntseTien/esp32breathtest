@@ -3,12 +3,14 @@
 #include "esp_event.h"
 #include "nvs_flash.h"
 #include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+#include "lwip/err.h"
+#include "lwip/sockets.h"
 #include <string.h>
 
 #include "wifi.h"
 #include <Global.h>
+
+#define PORT 8080
 
 static const char *TAG = "WiFiConnect";
 static EventGroupHandle_t wifi_event_group;
@@ -62,25 +64,34 @@ void wifi_init(void) {
     ESP_ERROR_CHECK(esp_wifi_start());
 }
 
-static void setup_udp(void) {
-    // 创建UDP socket
-    udp_socket = socket(AF_INET, SOCK_DGRAM, 0);
-    if (udp_socket < 0) {
-        perror("Cannot open socket");
+static void setup_tcp_server(void) {
+    int server_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+    if (server_socket < 0) {
+        ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
         return;
     }
 
-    // 配置目标服务器的地址和端口
+    struct sockaddr_in server_addr;
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(TARGET_UDP_PORT); // 目标UDP端口
+    server_addr.sin_port = htons(PORT);
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    // 将目标服务器IP地址字符串转换为网络字节序
-    // 假设目标服务器IP为"192.168.1.100"
-    if (inet_pton(AF_INET, TARGET_UDP_IP, &server_addr.sin_addr) <= 0) {
-        perror("Invalid address/ Address not supported");
+    int err = bind(server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr));
+    if (err != 0) {
+        ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
+        close(server_socket);
         return;
     }
+
+    err = listen(server_socket, 1);
+    if (err != 0) {
+        ESP_LOGE(TAG, "Error occurred during listen: errno %d", errno);
+        close(server_socket);
+        return;
+    }
+
+    ESP_LOGI(TAG, "TCP server listening on port %d", PORT);
 }
 
 void wifi_connect_task(void *pvParameters) {
@@ -95,16 +106,13 @@ void wifi_connect_task(void *pvParameters) {
 
         if (bits & CONNECTED_BIT) {
             ESP_LOGI(TAG, "WiFi Connected");
-            wifi_is_not_connect = false;
-            setup_udp();
-            ESP_LOGI(TAG, "Set Up UDP");
+            setup_tcp_server();  // Set up TCP server after WiFi is connected
+            ESP_LOGI(TAG, "TCP Server Set Up");
             xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
         } else if (bits & FAIL_BIT) {
-            wifi_is_not_connect = true;
             ESP_LOGI(TAG, "Failed to connect to WiFi. Retrying...");
             xEventGroupClearBits(wifi_event_group, FAIL_BIT);
         } else {
-            wifi_is_not_connect = true;
             ESP_LOGE(TAG, "Unexpected event");
         }
     }
