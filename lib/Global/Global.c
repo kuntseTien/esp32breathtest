@@ -12,6 +12,6 @@ SemaphoreHandle_t wifi_send_semaphore;
 SemaphoreHandle_t ad7091r_parse_semaphore;
 SemaphoreHandle_t timer_semaphore;
 
-int TCP_socket;
+int tcp_socket;
 struct sockaddr_in server_addr;
 bool wifi_is_not_connect = true;

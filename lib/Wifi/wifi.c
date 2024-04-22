@@ -6,11 +6,16 @@
 #include "lwip/err.h"
 #include "lwip/sockets.h"
 #include <string.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include "wifi.h"
 #include <Global.h>
+#include <lwip/def.h>
+#include <cc.h>
 
-#define PORT 8080
+#define SERVER_IP "192.168.0.195"
+#define SERVER_PORT 11520
 
 static const char *TAG = "WiFiConnect";
 static EventGroupHandle_t wifi_event_group;
@@ -64,36 +69,29 @@ void wifi_init(void) {
     ESP_ERROR_CHECK(esp_wifi_start());
 }
 
-static void setup_tcp_server(void) {
-    int server_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-    if (server_socket < 0) {
-        ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
+void setup_tcp_client(void) {
+    struct sockaddr_in server_addr;
+
+    tcp_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (tcp_socket < 0) {
+        ESP_LOGE(TAG, "Cannot open socket: errno %d", errno);
         return;
     }
 
-    struct sockaddr_in server_addr;
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(PORT);
-    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    server_addr.sin_port = htons(SERVER_PORT);
+    inet_pton(AF_INET, SERVER_IP, &server_addr.sin_addr);
 
-    int err = bind(server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr));
-    if (err != 0) {
-        ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
-        close(server_socket);
+    if (connect(tcp_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) != 0) {
+        ESP_LOGE(TAG, "Socket unable to connect: errno %d", errno);
+        close(tcp_socket);
+        tcp_socket = -1; // 重置套接字
         return;
     }
 
-    err = listen(server_socket, 1);
-    if (err != 0) {
-        ESP_LOGE(TAG, "Error occurred during listen: errno %d", errno);
-        close(server_socket);
-        return;
-    }
-
-    ESP_LOGI(TAG, "TCP server listening on port %d", PORT);
+    ESP_LOGI(TAG, "TCP socket connected");
 }
-
 void wifi_connect_task(void *pvParameters) {
     wifi_init();
     
@@ -106,8 +104,8 @@ void wifi_connect_task(void *pvParameters) {
 
         if (bits & CONNECTED_BIT) {
             ESP_LOGI(TAG, "WiFi Connected");
-            setup_tcp_server();  // Set up TCP server after WiFi is connected
-            ESP_LOGI(TAG, "TCP Server Set Up");
+            setup_tcp_client();  // 初始化并连接 TCP 客户端
+            wifi_is_not_connect = false;
             xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
         } else if (bits & FAIL_BIT) {
             ESP_LOGI(TAG, "Failed to connect to WiFi. Retrying...");

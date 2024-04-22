@@ -6,6 +6,8 @@
 #include "esp_attr.h"
 #include "esp_log.h"
 #include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
 
 #include <SPI.h>
 #include <AD7091R.h>
@@ -175,11 +177,11 @@ void compress_and_transmit(void *para)
             // mz_deflateEnd(&stream);
 
             // test
-            float t = 3.14f;
-            memcpy((uint8_t*)wifi_buffer, (uint8_t*)&t, 4);
+            // float t = 3.14f;
+            // memcpy((uint8_t*)wifi_buffer, (uint8_t*)&t, 4);
 
             uint8_t* float_buf = (uint8_t*) wifi_buffer;
-            ssize_t sent_bytes = sendto(udp_socket, float_buf, BUFFER_SIZE*sizeof(float), 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
+            ssize_t sent_bytes = sendto(tcp_socket, float_buf, BUFFER_SIZE*sizeof(float), 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
 
             ESP_LOGI("compression and tx", "Sent %d bytes", sent_bytes);
         }
@@ -234,7 +236,7 @@ void app_main()
     {
         vTaskDelay(pdMS_TO_TICKS(100));
     }
-
+    ESP_LOGI("app_main", "Create parse");
     xTaskCreate(&ad7091r_parse, 
                 "ad7091r_parse",
                 2048,
